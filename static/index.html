@@ -1,1 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>OpenEMR — FHIR R4</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&family=Libre+Franklin:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --bg: #0d1117;
+  --bg2: #131920;
+  --surface: #161d26;
+  --surface2: #1c2530;
+  --border: #243040;
+  --accent: #00d4aa;
+  --accent2: #3b82f6;
+  --warn: #f59e0b;
+  --danger: #ef4444;
+  --text: #e2ecf5;
+  --muted: #5c7a96;
+  --muted2: #8baaba;
+  --radius: 12px;
+  --font-display: 'Syne', sans-serif;
+  --font-body: 'Libre Franklin', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── HEADER ── */
+header {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2rem;
+  position: sticky; top: 0; z-index: 100;
+}
+
+.logo {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  display: flex; align-items: center; gap: 10px;
+}
+.logo-ring {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  display: grid; place-items: center;
+  font-size: 0.75rem;
+  color: var(--accent);
+  font-weight: 700;
+}
+.logo span { color: var(--accent); }
+
+.fhir-badge {
+  background: rgba(0,212,170,0.1);
+  border: 1px solid rgba(0,212,170,0.3);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 20px;
+  letter-spacing: 0.08em;
+}
+
+/* ── LAYOUT ── */
+.shell { display: flex; flex: 1; }
+
+/* ── SIDEBAR ── */
+.sidebar {
+  width: 210px;
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  padding: 1.5rem 0;
+  position: sticky; top: 60px;
+  height: calc(100vh - 60px);
+  display: flex; flex-direction: column; gap: 2px;
+}
+
+.nav-section {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.18em;
+  color: var(--muted);
+  padding: 0.9rem 1.3rem 0.3rem;
+  text-transform: uppercase;
+}
+
+.nav-btn {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; padding: 0.6rem 1.3rem;
+  background: transparent; border: none;
+  color: var(--muted2); font-family: var(--font-body);
+  font-size: 0.85rem; font-weight: 500;
+  cursor: pointer; text-align: left;
+  transition: all 0.15s;
+  border-left: 2px solid transparent;
+}
+.nav-btn:hover { background: var(--surface); color: var(--text); }
+.nav-btn.active { background: rgba(0,212,170,0.08); color: var(--accent); border-left-color: var(--accent); }
+.nav-icon { font-size: 0.9rem; opacity: 0.8; width: 18px; }
+
+/* ── CONTENT ── */
+.content { flex: 1; padding: 2rem 2.5rem; max-width: 920px; }
+.page { display: none; }
+.page.active { display: block; animation: slideIn 0.2s ease; }
+@keyframes slideIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+
+.page-header { margin-bottom: 2rem; }
+.page-title {
+  font-family: var(--font-display);
+  font-size: 1.8rem; font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--text);
+  line-height: 1;
+  margin-bottom: 0.3rem;
+}
+.page-sub {
+  font-size: 0.82rem; color: var(--muted);
+  font-family: var(--font-mono);
+}
+.page-sub .endpoint {
+  color: var(--accent2);
+  background: rgba(59,130,246,0.1);
+  padding: 1px 7px; border-radius: 4px;
+}
+
+/* ── CARDS ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  margin-bottom: 1.2rem;
+}
+.card-label {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.15em;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin-bottom: 1rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── STATS ── */
+.stats-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 1rem; margin-bottom: 1.4rem; }
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.2rem 1.4rem;
+  position: relative; overflow: hidden;
+}
+.stat-card::before {
+  content: '';
+  position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
+  background: var(--accent);
+  opacity: 0.4;
+}
+.stat-card.blue::before { background: var(--accent2); }
+.stat-card.warn::before { background: var(--warn); }
+.stat-num {
+  font-family: var(--font-display);
+  font-size: 2.4rem; font-weight: 800;
+  color: var(--accent); line-height: 1;
+  letter-spacing: -0.04em;
+}
+.stat-card.blue .stat-num { color: var(--accent2); }
+.stat-card.warn .stat-num { color: var(--warn); }
+.stat-lbl {
+  font-family: var(--font-mono);
+  font-size: 0.65rem; color: var(--muted);
+  letter-spacing: 0.1em; text-transform: uppercase;
+  margin-top: 4px;
+}
+
+/* ── FORM ── */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+label {
+  font-family: var(--font-mono);
+  font-size: 0.65rem; letter-spacing: 0.12em;
+  color: var(--muted); text-transform: uppercase;
+}
+input, select, textarea {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 0.9rem;
+  color: var(--text);
+  font-family: var(--font-body); font-size: 0.88rem;
+  outline: none; width: 100%;
+  transition: border 0.15s, box-shadow 0.15s;
+}
+input:focus, select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0,212,170,0.1);
+}
+select option { background: var(--bg2); }
+
+/* ── BUTTONS ── */
+.btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 0.6rem 1.3rem;
+  border-radius: 8px; border: none;
+  font-family: var(--font-body); font-size: 0.85rem; font-weight: 600;
+  cursor: pointer; transition: all 0.15s;
+}
+.btn-primary { background: var(--accent); color: #0d1117; }
+.btn-primary:hover { background: #00bfa0; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,212,170,0.3); }
+.btn-blue { background: var(--accent2); color: #fff; }
+.btn-blue:hover { background: #2563eb; transform: translateY(-1px); }
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-danger:hover { background: #dc2626; }
+.btn-ghost {
+  background: transparent; color: var(--muted2);
+  border: 1px solid var(--border);
+}
+.btn-ghost:hover { border-color: var(--accent); color: var(--accent); background: rgba(0,212,170,0.05); }
+
+/* ── ALERTS ── */
+.alert {
+  border-radius: 8px; padding: 0.65rem 1rem;
+  font-size: 0.82rem; margin-top: 0.8rem;
+  font-family: var(--font-mono);
+  display: none; align-items: center; gap: 8px;
+}
+.alert.show { display: flex; animation: slideIn 0.2s; }
+.alert-success { background: rgba(0,212,170,0.08); color: var(--accent); border: 1px solid rgba(0,212,170,0.25); }
+.alert-error { background: rgba(239,68,68,0.08); color: #fca5a5; border: 1px solid rgba(239,68,68,0.25); }
+.alert-warn { background: rgba(245,158,11,0.08); color: #fcd34d; border: 1px solid rgba(245,158,11,0.25); }
+
+/* ── TABLE ── */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+thead tr { border-bottom: 2px solid var(--border); }
+th {
+  font-family: var(--font-mono);
+  font-size: 0.62rem; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--muted); padding: 0.7rem 0.9rem; text-align: left; white-space: nowrap;
+}
+td { padding: 0.75rem 0.9rem; border-bottom: 1px solid rgba(36,48,64,0.6); }
+tr:hover td { background: var(--surface2); }
+
+.mrn-tag {
+  font-family: var(--font-mono);
+  font-size: 0.75rem; color: var(--accent2);
+  background: rgba(59,130,246,0.08);
+  padding: 2px 8px; border-radius: 4px;
+}
+
+.gender-badge {
+  display: inline-block; padding: 2px 9px; border-radius: 20px;
+  font-size: 0.68rem; font-weight: 600; font-family: var(--font-mono);
+  letter-spacing: 0.06em; text-transform: capitalize;
+}
+.g-male { background: rgba(59,130,246,0.12); color: #93c5fd; }
+.g-female { background: rgba(236,72,153,0.12); color: #f9a8d4; }
+.g-other { background: rgba(168,85,247,0.12); color: #d8b4fe; }
+
+/* ── PATIENT CARD ── */
+.pt-card {
+  display: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden; margin-top: 1.2rem;
+}
+.pt-card.show { display: block; animation: slideIn 0.2s; }
+.pt-card-head {
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  padding: 1rem 1.4rem;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.pt-card-head h3 { font-family: var(--font-display); font-size: 1.2rem; font-weight: 700; }
+.pt-fields { display: grid; grid-template-columns: repeat(3,1fr); }
+.pf {
+  padding: 0.9rem 1.1rem;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.pf:nth-child(3n) { border-right: none; }
+.pf-lbl { font-family: var(--font-mono); font-size: 0.58rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+.pf-val { font-size: 0.9rem; font-weight: 500; color: var(--text); }
+
+/* ── FHIR RAW ── */
+.fhir-raw {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem 1.2rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--muted2);
+  white-space: pre-wrap;
+  max-height: 180px;
+  overflow-y: auto;
+  margin-top: 0.8rem;
+  line-height: 1.6;
+}
+.fhir-key { color: var(--accent2); }
+.fhir-str { color: #86efac; }
+.fhir-num { color: var(--warn); }
+
+/* ── SPINNER ── */
+.spinner {
+  width: 18px; height: 18px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  display: inline-block;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-ring">⚕</div>
+    Open<span>EMR</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:0.8rem;">
+    <span class="fhir-badge">FHIR R4</span>
+    <span style="font-family:var(--font-mono);font-size:0.72rem;color:var(--muted);">HL7 Compliant</span>
+  </div>
+</header>
+
+<div class="shell">
+  <nav class="sidebar">
+    <div class="nav-section">Core</div>
+    <button class="nav-btn active" onclick="showPage('dashboard',this)"><span class="nav-icon">▦</span>Dashboard</button>
+    <button class="nav-btn" onclick="showPage('all',this)"><span class="nav-icon">◫</span>All Patients</button>
+    <div class="nav-section">Patient</div>
+    <button class="nav-btn" onclick="showPage('register',this)"><span class="nav-icon">＋</span>Register</button>
+    <button class="nav-btn" onclick="showPage('search',this)"><span class="nav-icon">⌕</span>Search</button>
+    <button class="nav-btn" onclick="showPage('update',this)"><span class="nav-icon">✎</span>Update</button>
+    <button class="nav-btn" onclick="showPage('delete',this)"><span class="nav-icon">⌫</span>Delete</button>
+  </nav>
+
+  <main class="content">
+
+    <!-- DASHBOARD -->
+    <div id="page-dashboard" class="page active">
+      <div class="page-header">
+        <div class="page-title">Dashboard</div>
+        <div class="page-sub">FHIR Bundle · <span class="endpoint">GET /fhir/stats</span></div>
+      </div>
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-num" id="s-total">—</div><div class="stat-lbl">Total Patients</div></div>
+        <div class="stat-card blue"><div class="stat-num" id="s-male">—</div><div class="stat-lbl">Male</div></div>
+        <div class="stat-card warn"><div class="stat-num" id="s-female">—</div><div class="stat-lbl">Female</div></div>
+      </div>
+      <div class="card">
+        <div class="card-label">Recent Activity</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>MRN</th><th>Name</th><th>Gender</th><th>Age</th><th>Diagnosis</th></tr></thead>
+            <tbody id="dash-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ALL PATIENTS -->
+    <div id="page-all" class="page">
+      <div class="page-header">
+        <div class="page-title">All Patients</div>
+        <div class="page-sub">FHIR Bundle · <span class="endpoint">GET /fhir/Patient</span></div>
+      </div>
+      <div class="card" style="padding:0; overflow:hidden;">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>MRN</th><th>Name</th><th>Gender</th><th>Age</th><th>Address</th><th>Diagnosis</th><th>Treatment</th></tr></thead>
+            <tbody id="all-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- REGISTER -->
+    <div id="page-register" class="page">
+      <div class="page-header">
+        <div class="page-title">Register Patient</div>
+        <div class="page-sub">Create FHIR Patient Resource · <span class="endpoint">POST /fhir/Patient</span></div>
+      </div>
+      <div class="card">
+        <div class="card-label">Patient Information</div>
+        <div class="form-grid">
+          <div class="field"><label>MRN</label><input id="r-mrn" placeholder="e.g. 1145999"/></div>
+          <div class="field"><label>Full Name</label><input id="r-name" placeholder="First Last"/></div>
+          <div class="field"><label>Gender</label>
+            <select id="r-gender"><option>Male</option><option>Female</option><option>Other</option></select>
+          </div>
+          <div class="field"><label>Age</label><input id="r-age" type="number" min="0" max="130" placeholder="28"/></div>
+          <div class="field" style="grid-column:span 2"><label>Address</label><input id="r-addr" placeholder="123 Main St, Atlanta GA"/></div>
+          <div class="field"><label>Diagnosis</label><input id="r-diag" placeholder="e.g. Flu"/></div>
+          <div class="field"><label>Treatment</label><input id="r-treat" placeholder="e.g. Antiviral Medication"/></div>
+        </div>
+        <div style="margin-top:1.2rem; display:flex; gap:0.8rem; align-items:center;">
+          <button class="btn btn-primary" onclick="registerPatient()">Register Patient</button>
+          <span id="r-spin" style="display:none;"><span class="spinner"></span></span>
+        </div>
+        <div id="r-alert" class="alert"></div>
+      </div>
+    </div>
+
+    <!-- SEARCH -->
+    <div id="page-search" class="page">
+      <div class="page-header">
+        <div class="page-title">Search Patient</div>
+        <div class="page-sub">Fetch FHIR Patient · <span class="endpoint">GET /fhir/Patient/{mrn}</span></div>
+      </div>
+      <div class="card">
+        <div class="form-grid">
+          <div class="field">
+            <label>Patient MRN</label>
+            <input id="s-mrn" placeholder="e.g. 1145980" onkeydown="if(event.key==='Enter')searchPatient()"/>
+          </div>
+        </div>
+        <div style="margin-top:1rem;display:flex;gap:0.8rem;align-items:center;">
+          <button class="btn btn-blue" onclick="searchPatient()">Search</button>
+          <span id="s-spin" style="display:none;"><span class="spinner"></span></span>
+        </div>
+        <div id="s-alert" class="alert"></div>
+      </div>
+      <div id="s-result" class="pt-card">
+        <div class="pt-card-head">
+          <div>
+            <h3 id="s-name"></h3>
+            <div style="font-family:var(--font-mono);font-size:0.72rem;color:var(--muted);margin-top:3px;">MRN: <span id="s-mrn-d" style="color:var(--accent2);"></span></div>
+          </div>
+          <span id="s-gbadge" class="gender-badge"></span>
+        </div>
+        <div class="pt-fields">
+          <div class="pf"><div class="pf-lbl">Age</div><div class="pf-val" id="s-age"></div></div>
+          <div class="pf"><div class="pf-lbl">Diagnosis</div><div class="pf-val" id="s-diag"></div></div>
+          <div class="pf"><div class="pf-lbl">Treatment</div><div class="pf-val" id="s-treat"></div></div>
+          <div class="pf" style="grid-column:span 3;border-bottom:none;"><div class="pf-lbl">Address</div><div class="pf-val" id="s-addr"></div></div>
+        </div>
+        <div style="padding:0.8rem 1.1rem;border-top:1px solid var(--border);">
+          <div style="font-family:var(--font-mono);font-size:0.62rem;color:var(--muted);margin-bottom:5px;letter-spacing:0.1em;">FHIR RAW RESOURCE</div>
+          <div class="fhir-raw" id="s-raw"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- UPDATE -->
+    <div id="page-update" class="page">
+      <div class="page-header">
+        <div class="page-title">Update Patient</div>
+        <div class="page-sub">Patch FHIR Resource · <span class="endpoint">PUT /fhir/Patient/{mrn}</span></div>
+      </div>
+      <div class="card">
+        <div class="card-label">Locate Patient</div>
+        <div class="form-grid">
+          <div class="field"><label>MRN</label><input id="u-mrn" placeholder="e.g. 1145980"/></div>
+        </div>
+        <button class="btn btn-ghost" style="margin-top:1rem;" onclick="loadUpdate()">Load Record</button>
+        <div id="u-alert" class="alert"></div>
+      </div>
+      <div id="u-form" style="display:none;" class="card">
+        <div class="card-label">Edit Fields</div>
+        <div class="form-grid">
+          <div class="field"><label>Field</label>
+            <select id="u-field">
+              <option value="name">Name</option>
+              <option value="gender">Gender</option>
+              <option value="age">Age</option>
+              <option value="address">Address</option>
+              <option value="diagnosis">Diagnosis</option>
+              <option value="treatment">Treatment</option>
+            </select>
+          </div>
+          <div class="field"><label>New Value</label><input id="u-val" placeholder="Enter new value"/></div>
+        </div>
+        <div id="u-current" style="margin-top:1rem;font-family:var(--font-mono);font-size:0.75rem;color:var(--muted2);background:var(--bg);padding:0.9rem 1rem;border-radius:8px;line-height:1.9;"></div>
+        <div style="margin-top:1rem;display:flex;gap:0.8rem;align-items:center;">
+          <button class="btn btn-primary" onclick="saveUpdate()">Save Changes</button>
+          <span id="u-spin" style="display:none;"><span class="spinner"></span></span>
+        </div>
+        <div id="u-alert2" class="alert"></div>
+      </div>
+    </div>
+
+    <!-- DELETE -->
+    <div id="page-delete" class="page">
+      <div class="page-header">
+        <div class="page-title">Delete Patient</div>
+        <div class="page-sub">Remove FHIR Resource · <span class="endpoint">DELETE /fhir/Patient/{mrn}</span></div>
+      </div>
+      <div class="card">
+        <div class="card-label">Confirm Deletion</div>
+        <div class="form-grid">
+          <div class="field"><label>MRN</label><input id="d-mrn" placeholder="e.g. 1145980"/></div>
+        </div>
+        <div style="margin-top:1rem;display:flex;gap:1rem;align-items:center;">
+          <button class="btn btn-danger" onclick="deletePatient()">Delete Record</button>
+          <span style="font-family:var(--font-mono);font-size:0.72rem;color:var(--muted);">⚠ Irreversible operation</span>
+        </div>
+        <div id="d-alert" class="alert"></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+const API = '';  // same origin
+
+function showPage(id, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  btn.classList.add('active');
+  if (id === 'dashboard') loadDashboard();
+  if (id === 'all') loadAll();
+}
+
+function showAlert(id, type, msg) {
+  const el = document.getElementById(id);
+  el.className = `alert alert-${type} show`;
+  el.textContent = msg;
+  setTimeout(() => el.classList.remove('show'), 4000);
+}
+
+function gBadge(gender) {
+  const cls = gender === 'male' ? 'g-male' : gender === 'female' ? 'g-female' : 'g-other';
+  return `<span class="gender-badge ${cls}">${gender}</span>`;
+}
+
+function syntaxHL(obj) {
+  return JSON.stringify(obj, null, 2)
+    .replace(/"([^"]+)":/g, '<span class="fhir-key">"$1"</span>:')
+    .replace(/: "([^"]+)"/g, ': <span class="fhir-str">"$1"</span>')
+    .replace(/: (\d+)/g, ': <span class="fhir-num">$1</span>');
+}
+
+async function loadDashboard() {
+  const res = await fetch(`${API}/fhir/stats`);
+  const d = await res.json();
+  document.getElementById('s-total').textContent = d.total;
+  document.getElementById('s-male').textContent = d.male;
+  document.getElementById('s-female').textContent = d.female;
+  document.getElementById('dash-body').innerHTML = d.recent.map(p => `
+    <tr>
+      <td><span class="mrn-tag">${p.mrn}</span></td>
+      <td><strong>${p.name}</strong></td>
+      <td>${gBadge(p.gender)}</td>
+      <td>${p.age}</td>
+      <td>${p.diagnosis}</td>
+    </tr>`).join('');
+}
+
+async function loadAll() {
+  const res = await fetch(`${API}/fhir/Patient`);
+  const d = await res.json();
+  document.getElementById('all-body').innerHTML = d.entry.map(e => {
+    const p = e.resource;
+    return `<tr>
+      <td><span class="mrn-tag">${p.mrn}</span></td>
+      <td><strong>${p.name}</strong></td>
+      <td>${gBadge(p.gender)}</td>
+      <td>${p.age}</td>
+      <td style="font-size:0.8rem;color:var(--muted2);">${p.address}</td>
+      <td>${p.diagnosis}</td>
+      <td style="font-size:0.82rem;">${p.treatment}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function registerPatient() {
+  const mrn = document.getElementById('r-mrn').value.trim();
+  const name = document.getElementById('r-name').value.trim();
+  if (!mrn || !name) { showAlert('r-alert','warn','MRN and Name are required'); return; }
+  document.getElementById('r-spin').style.display = 'inline';
+  const res = await fetch(`${API}/fhir/Patient`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      mrn, name,
+      gender: document.getElementById('r-gender').value,
+      age: parseInt(document.getElementById('r-age').value) || 0,
+      address: document.getElementById('r-addr').value.trim(),
+      diagnosis: document.getElementById('r-diag').value.trim(),
+      treatment: document.getElementById('r-treat').value.trim(),
+    })
+  });
+  document.getElementById('r-spin').style.display = 'none';
+  const d = await res.json();
+  if (res.ok) {
+    showAlert('r-alert','success',`✓ ${name} registered (MRN ${mrn})`);
+    ['r-mrn','r-name','r-age','r-addr','r-diag','r-treat'].forEach(id => document.getElementById(id).value='');
+  } else {
+    showAlert('r-alert','error',d.detail || 'Error registering patient');
+  }
+}
+
+async function searchPatient() {
+  const mrn = document.getElementById('s-mrn').value.trim();
+  const result = document.getElementById('s-result');
+  if (!mrn) return;
+  document.getElementById('s-spin').style.display = 'inline';
+  const res = await fetch(`${API}/fhir/Patient/${mrn}`);
+  document.getElementById('s-spin').style.display = 'none';
+  if (!res.ok) { showAlert('s-alert','error','Patient not found'); result.classList.remove('show'); return; }
+  const p = await res.json();
+  document.getElementById('s-name').textContent = p.name;
+  document.getElementById('s-mrn-d').textContent = mrn;
+  document.getElementById('s-age').textContent = p.age;
+  document.getElementById('s-diag').textContent = p.diagnosis;
+  document.getElementById('s-treat').textContent = p.treatment;
+  document.getElementById('s-addr').textContent = p.address;
+  const badge = document.getElementById('s-gbadge');
+  badge.textContent = p.gender;
+  badge.className = `gender-badge ${p.gender === 'male' ? 'g-male' : p.gender === 'female' ? 'g-female' : 'g-other'}`;
+  document.getElementById('s-raw').innerHTML = syntaxHL(p);
+  result.classList.add('show');
+}
+
+async function loadUpdate() {
+  const mrn = document.getElementById('u-mrn').value.trim();
+  const res = await fetch(`${API}/fhir/Patient/${mrn}`);
+  if (!res.ok) { showAlert('u-alert','error','Patient not found'); document.getElementById('u-form').style.display='none'; return; }
+  const p = await res.json();
+  document.getElementById('u-form').style.display = 'block';
+  document.getElementById('u-current').innerHTML =
+    Object.entries(p).map(([k,v]) => `<span style="color:var(--accent2)">${k}</span>: ${v}`).join('<br>');
+  document.getElementById('u-val').value = '';
+}
+
+async function saveUpdate() {
+  const mrn = document.getElementById('u-mrn').value.trim();
+  const field = document.getElementById('u-field').value;
+  const val = document.getElementById('u-val').value.trim();
+  if (!val) { showAlert('u-alert2','warn','Please enter a value'); return; }
+  const body = {};
+  body[field] = field === 'age' ? parseInt(val) : val;
+  document.getElementById('u-spin').style.display = 'inline';
+  const res = await fetch(`${API}/fhir/Patient/${mrn}`, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  });
+  document.getElementById('u-spin').style.display = 'none';
+  const d = await res.json();
+  if (res.ok) {
+    showAlert('u-alert2','success',`✓ ${field} updated`);
+    loadUpdate();
+  } else {
+    showAlert('u-alert2','error', d.detail || 'Update failed');
+  }
+}
+
+async function deletePatient() {
+  const mrn = document.getElementById('d-mrn').value.trim();
+  if (!mrn) return;
+  if (!confirm(`Permanently delete patient MRN ${mrn}?`)) return;
+  const res = await fetch(`${API}/fhir/Patient/${mrn}`, { method: 'DELETE' });
+  const d = await res.json();
+  if (res.ok) {
+    showAlert('d-alert','success',`✓ ${d.message}`);
+    document.getElementById('d-mrn').value = '';
+  } else {
+    showAlert('d-alert','error', d.detail || 'Error');
+  }
+}
+
+// Initial load
+loadDashboard();
+</script>
+</body>
+</html>
 
