@@ -1,16 +1,13 @@
 """
-OpenEMR FHIR-compliant EHR Backend
-FHIR R4 Patient resource: https://www.hl7.org/fhir/patient.html
+OpenEMR FHIR-compliant EHR Backend - No pydantic dependency
 """
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
-from typing import Optional, List
 from datetime import datetime
-import uuid
+from typing import Optional
 
 app = FastAPI(title="OpenEMR FHIR API", version="1.0.0")
 
@@ -21,90 +18,47 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ─── In-memory FHIR store ─────────────────────────────────────────────────────
 
-# ─── FHIR R4 Models ──────────────────────────────────────────────────────────
+patients = {}   # mrn -> dict
+conditions = {} # mrn -> dict
 
-class HumanName(BaseModel):
-    use: str = "official"
-    text: str
-    family: Optional[str] = None
-    given: Optional[List[str]] = None
-
-class Address(BaseModel):
-    use: str = "home"
-    text: str
-    country: str = "US"
-
-class CodeableConcept(BaseModel):
-    text: str
-
-class Condition(BaseModel):
-    resourceType: str = "Condition"
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    subject_ref: str
-    code: CodeableConcept
-    treatment: str
-
-class Patient(BaseModel):
-    resourceType: str = "Patient"
-    id: str
-    name: List[HumanName]
-    gender: str
-    age: Optional[int] = None
-    address: Optional[List[Address]] = None
-    active: bool = True
-    meta: dict = Field(default_factory=lambda: {
-        "lastUpdated": datetime.utcnow().isoformat() + "Z",
-        "profile": ["http://hl7.org/fhir/StructureDefinition/Patient"]
-    })
-
-class PatientCreate(BaseModel):
-    mrn: str
-    name: str
-    gender: str
-    age: int
-    address: str
-    diagnosis: str
-    treatment: str
-
-class PatientUpdate(BaseModel):
-    name: Optional[str] = None
-    gender: Optional[str] = None
-    age: Optional[int] = None
-    address: Optional[str] = None
-    diagnosis: Optional[str] = None
-    treatment: Optional[str] = None
-
-
-# ─── Helpers ─────────────────────────────────────────────────────────────────
-
-def build_patient(mrn, name, gender, age, address):
+def make_patient(mrn, name, gender, age, address):
     parts = name.strip().split(" ", 1)
-    return Patient(
-        id=mrn,
-        name=[HumanName(text=name, given=[parts[0]], family=parts[1] if len(parts) > 1 else "")],
-        gender=gender.lower(),
-        age=age,
-        address=[Address(text=address)]
-    )
-
-def make_condition(mrn, diagnosis, treatment):
-    return Condition(subject_ref=mrn, code=CodeableConcept(text=diagnosis), treatment=treatment)
-
-def patient_summary(mrn):
-    p = patients[mrn]
-    c = conditions.get(mrn)
     return {
-        "mrn": mrn,
-        "name": p.name[0].text,
-        "gender": p.gender,
-        "age": p.age,
-        "address": p.address[0].text if p.address else "",
-        "diagnosis": c.code.text if c else "",
-        "treatment": c.treatment if c else "",
-        "lastUpdated": p.meta.get("lastUpdated", ""),
+        "resourceType": "Patient",
+        "id": mrn,
+        "name": [{"use": "official", "text": name,
+                  "given": [parts[0]], "family": parts[1] if len(parts) > 1 else ""}],
+        "gender": gender.lower(),
+        "age": age,
+        "address": [{"use": "home", "text": address, "country": "US"}],
+        "active": True,
+        "meta": {"lastUpdated": datetime.utcnow().isoformat() + "Z",
+                 "profile": ["http://hl7.org/fhir/StructureDefinition/Patient"]}
     }
 
+def make_condition(mrn, diagnosis, treatment):
+    return {
+        "resourceType": "Condition",
+        "subject_ref": mrn,
+        "code": {"text": diagnosis},
+        "treatment": treatment
+    }
+
+def summary(mrn):
+    p = patients[mrn]
+    c = conditions.get(mrn, {})
+    return {
+        "mrn": mrn,
+        "name": p["name"][0]["text"],
+        "gender": p["gender"],
+        "age": p["age"],
+        "address": p["address"][0]["text"] if p["address"] else "",
+        "diagnosis": c.get("code", {}).get("text", ""),
+        "treatment": c.get("treatment", ""),
+        "lastUpdated": p["meta"]["lastUpdated"],
+    }
 
 # ─── Seed Data ────────────────────────────────────────────────────────────────
 
@@ -123,63 +77,65 @@ _seed = [
     ("1145991","Jason Davis","Male",90,"560 Creek Side Way Snellville GA","Cancer","Chemotherapy"),
 ]
 
-patients = {}
-conditions = {}
-
 for mrn, name, gender, age, address, diagnosis, treatment in _seed:
-    patients[mrn] = build_patient(mrn, name, gender, age, address)
+    patients[mrn] = make_patient(mrn, name, gender, age, address)
     conditions[mrn] = make_condition(mrn, diagnosis, treatment)
-
 
 # ─── FHIR Endpoints ───────────────────────────────────────────────────────────
 
 @app.get("/fhir/Patient")
 def list_patients():
-    summaries = [patient_summary(mrn) for mrn in patients]
-    return {"resourceType": "Bundle", "type": "searchset", "total": len(summaries),
-            "entry": [{"resource": s} for s in summaries]}
+    entries = [summary(mrn) for mrn in patients]
+    return {"resourceType": "Bundle", "type": "searchset",
+            "total": len(entries), "entry": [{"resource": e} for e in entries]}
 
 @app.get("/fhir/Patient/{mrn}")
 def get_patient(mrn: str):
     if mrn not in patients:
         raise HTTPException(404, detail=f"Patient {mrn} not found")
-    return patient_summary(mrn)
+    return summary(mrn)
 
 @app.post("/fhir/Patient", status_code=201)
-def create_patient(body: PatientCreate):
-    if body.mrn in patients:
+async def create_patient(req: dict):
+    mrn = req.get("mrn", "").strip()
+    name = req.get("name", "").strip()
+    if not mrn or not name:
+        raise HTTPException(400, detail="mrn and name are required")
+    if mrn in patients:
         raise HTTPException(409, detail="Patient MRN already exists")
-    patients[body.mrn] = build_patient(body.mrn, body.name, body.gender, body.age, body.address)
-    conditions[body.mrn] = make_condition(body.mrn, body.diagnosis, body.treatment)
-    return {"message": f"Patient {body.name} registered", "mrn": body.mrn}
+    patients[mrn] = make_patient(mrn, name, req.get("gender","Other"),
+                                  int(req.get("age", 0)), req.get("address",""))
+    conditions[mrn] = make_condition(mrn, req.get("diagnosis",""), req.get("treatment",""))
+    return {"message": f"Patient {name} registered", "mrn": mrn}
 
 @app.put("/fhir/Patient/{mrn}")
-def update_patient(mrn: str, body: PatientUpdate):
+async def update_patient(mrn: str, req: dict):
     if mrn not in patients:
         raise HTTPException(404, detail="Patient not found")
     p = patients[mrn]
-    c = conditions.get(mrn)
-    if body.name:
-        parts = body.name.strip().split(" ", 1)
-        p.name = [HumanName(text=body.name, given=[parts[0]], family=parts[1] if len(parts) > 1 else "")]
-    if body.gender:
-        p.gender = body.gender.lower()
-    if body.age is not None:
-        p.age = body.age
-    if body.address:
-        p.address = [Address(text=body.address)]
-    if body.diagnosis and c:
-        c.code.text = body.diagnosis
-    if body.treatment and c:
-        c.treatment = body.treatment
-    p.meta["lastUpdated"] = datetime.utcnow().isoformat() + "Z"
+    c = conditions.get(mrn, {})
+    if "name" in req:
+        parts = req["name"].strip().split(" ", 1)
+        p["name"] = [{"use":"official","text":req["name"],
+                      "given":[parts[0]],"family":parts[1] if len(parts)>1 else ""}]
+    if "gender" in req:
+        p["gender"] = req["gender"].lower()
+    if "age" in req:
+        p["age"] = int(req["age"])
+    if "address" in req:
+        p["address"] = [{"use":"home","text":req["address"],"country":"US"}]
+    if "diagnosis" in req and c:
+        c["code"]["text"] = req["diagnosis"]
+    if "treatment" in req and c:
+        c["treatment"] = req["treatment"]
+    p["meta"]["lastUpdated"] = datetime.utcnow().isoformat() + "Z"
     return {"message": "Patient updated", "mrn": mrn}
 
 @app.delete("/fhir/Patient/{mrn}")
 def delete_patient(mrn: str):
     if mrn not in patients:
         raise HTTPException(404, detail="Patient not found")
-    name = patients[mrn].name[0].text
+    name = patients[mrn]["name"][0]["text"]
     del patients[mrn]
     conditions.pop(mrn, None)
     return {"message": f"Patient {name} deleted", "mrn": mrn}
@@ -187,9 +143,9 @@ def delete_patient(mrn: str):
 @app.get("/fhir/stats")
 def get_stats():
     total = len(patients)
-    male = sum(1 for p in patients.values() if p.gender == "male")
-    female = sum(1 for p in patients.values() if p.gender == "female")
-    recent = [patient_summary(mrn) for mrn in list(patients.keys())[-6:]][::-1]
+    male = sum(1 for p in patients.values() if p["gender"] == "male")
+    female = sum(1 for p in patients.values() if p["gender"] == "female")
+    recent = [summary(mrn) for mrn in list(patients.keys())[-6:]][::-1]
     return {"total": total, "male": male, "female": female, "recent": recent}
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
